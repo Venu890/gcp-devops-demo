@@ -1,0 +1,54 @@
+substitutions:
+  _REGION: asia-south1
+  _REPO: gcp-devops-demo
+  _CLUSTER: devops-demo-cluster
+  _IMAGE: asia-south1-docker.pkg.dev/$PROJECT_ID/gcp-devops-demo/demo-app
+
+steps:
+
+  - name: "gcr.io/cloud-builders/docker"
+    id: "build-image"
+    args:
+      - build
+      - -t
+      - "${_IMAGE}:${SHORT_SHA}"
+      - -t
+      - "${_IMAGE}:latest"
+      - ./app
+
+  - name: "gcr.io/cloud-builders/docker"
+    id: "push-image"
+    args: [ "push", "--all-tags", "${_IMAGE}" ]
+
+  - name: "gcr.io/cloud-builders/gcloud"
+    id: "get-credentials"
+    args:
+      - container
+      - clusters
+      - get-credentials
+      - "${_CLUSTER}"
+      - --region=${_REGION}
+      - --project=$PROJECT_ID
+
+  - name: "gcr.io/cloud-builders/kubectl"
+    id: "apply-configmap"
+    args: [ "apply", "-f", "k8s/configmap.yaml" ]
+
+  - name: "gcr.io/cloud-builders/kubectl"
+    id: "update-image"
+    args:
+      - set
+      - image
+      - deployment/demo-app
+      - demo-app=${_IMAGE}:${SHORT_SHA}
+
+  - name: "gcr.io/cloud-builders/kubectl"
+    id: "verify-rollout"
+    args:
+      - rollout
+      - status
+      - deployment/demo-app
+      - --timeout=120s
+
+options:
+  logging: CLOUD_LOGGING_ONLY
