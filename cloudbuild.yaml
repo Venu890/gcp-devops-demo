@@ -11,14 +11,18 @@ steps:
     args:
       - build
       - -t
-      - "${_IMAGE}:${SHORT_SHA}"
+      - "asia-south1-docker.pkg.dev/$PROJECT_ID/gcp-devops-demo/demo-app:$SHORT\
+        _SHA"
       - -t
-      - "${_IMAGE}:latest"
+      - "asia-south1-docker.pkg.dev/$PROJECT_ID/gcp-devops-demo/demo-app:latest"
       - ./app
 
   - name: "gcr.io/cloud-builders/docker"
     id: "push-image"
-    args: [ "push", "--all-tags", "${_IMAGE}" ]
+    args:
+      - push
+      - --all-tags
+      - "asia-south1-docker.pkg.dev/$PROJECT_ID/gcp-devops-demo/demo-app"
 
   - name: "gcr.io/cloud-builders/gcloud"
     id: "get-credentials"
@@ -26,13 +30,16 @@ steps:
       - container
       - clusters
       - get-credentials
-      - "${_CLUSTER}"
-      - --region=${_REGION}
+      - devops-demo-cluster
+      - --zone=asia-south1-a
       - --project=$PROJECT_ID
 
   - name: "gcr.io/cloud-builders/kubectl"
     id: "apply-configmap"
     args: [ "apply", "-f", "k8s/configmap.yaml" ]
+    env:
+      - "CLOUDSDK_COMPUTE_ZONE=asia-south1-a"
+      - "CLOUDSDK_CONTAINER_CLUSTER=devops-demo-cluster"
 
   - name: "gcr.io/cloud-builders/kubectl"
     id: "update-image"
@@ -40,7 +47,10 @@ steps:
       - set
       - image
       - deployment/demo-app
-      - demo-app=${_IMAGE}:${SHORT_SHA}
+      - demo-app=asia-south1-docker.pkg.dev/$PROJECT_ID/gcp-devops-demo/demo-app:$SHORT_SHA
+    env:
+      - "CLOUDSDK_COMPUTE_ZONE=asia-south1-a"
+      - "CLOUDSDK_CONTAINER_CLUSTER=devops-demo-cluster"
 
   - name: "gcr.io/cloud-builders/kubectl"
     id: "verify-rollout"
@@ -49,6 +59,9 @@ steps:
       - status
       - deployment/demo-app
       - --timeout=120s
+    env:
+      - "CLOUDSDK_COMPUTE_ZONE=asia-south1-a"
+      - "CLOUDSDK_CONTAINER_CLUSTER=devops-demo-cluster"
 
 options:
   logging: CLOUD_LOGGING_ONLY
