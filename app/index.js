@@ -1,6 +1,6 @@
 const http = require('http');
-const color = process.env.COLOR || 'blue';
-const version = process.env.VERSION || 'v1';
+const color = process.env.COLOR || 'green';
+const version = process.env.VERSION || 'v2';
 
 const server = http.createServer((req, res) => {
   res.writeHead(200, {'Content-Type': 'text/html'});
