@@ -1,67 +1,44 @@
-substitutions:
-  _REGION: asia-south1
-  _REPO: gcp-devops-demo
-  _CLUSTER: devops-demo-cluster
-  _IMAGE: asia-south1-docker.pkg.dev/$PROJECT_ID/gcp-devops-demo/demo-app
-
 steps:
-
-  - name: "gcr.io/cloud-builders/docker"
-    id: "build-image"
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build'
     args:
-      - build
-      - -t
-      - "asia-south1-docker.pkg.dev/$PROJECT_ID/gcp-devops-demo/demo-app:$SHORT\
-        _SHA"
-      - -t
-      - "asia-south1-docker.pkg.dev/$PROJECT_ID/gcp-devops-demo/demo-app:latest"
-      - ./app
+      - 'build'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/polygon-infra/devops-demo-repo/color-app:$SHORT_SHA'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/polygon-infra/devops-demo-repo/color-app:latest'
+      - './app'
 
-  - name: "gcr.io/cloud-builders/docker"
-    id: "push-image"
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push'
+    args: ['push', '--all-tags', 'asia-south1-docker.pkg.dev/polygon-infra/devops-demo-repo/color-app']
+    waitFor: ['build']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'update-gitops'
+    entrypoint: 'bash'
     args:
-      - push
-      - --all-tags
-      - "asia-south1-docker.pkg.dev/$PROJECT_ID/gcp-devops-demo/demo-app"
+      - '-c'
+      - |
+        git clone https://Brahathees:$$GITHUB_TOKEN@github.com/Venu890/gcp-devops-gitops.git /workspace/gitops
+        cd /workspace/gitops
+        sed -i "s|image:.*color-app:.*|        image: asia-south1-docker.pkg.dev/polygon-infra/devops-demo-repo/color-app:$SHORT_SHA|g" envs/dev/rollout.yaml
+        sed -i "s|  tag:.*|  tag: \"$SHORT_SHA\"|g" envs/dev/values.yaml
+        git config user.email "cloudbuild@polygon-infra.com"
+        git config user.name "Cloud Build"
+        git add .
+        git commit -m "ci: update image to $SHORT_SHA"
+        git push
+    waitFor: ['push']
+    secretEnv: ['GITHUB_TOKEN']
 
-  - name: "gcr.io/cloud-builders/gcloud"
-    id: "get-credentials"
-    args:
-      - container
-      - clusters
-      - get-credentials
-      - devops-demo-cluster
-      - --zone=asia-south1-a
-      - --project=$PROJECT_ID
+availableSecrets:
+  secretManager:
+  - versionName: projects/polygon-infra/secrets/github-token/versions/latest
+    env: 'GITHUB_TOKEN'
 
-  - name: "gcr.io/cloud-builders/kubectl"
-    id: "apply-configmap"
-    args: [ "apply", "-f", "k8s/configmap.yaml" ]
-    env:
-      - "CLOUDSDK_COMPUTE_ZONE=asia-south1-a"
-      - "CLOUDSDK_CONTAINER_CLUSTER=devops-demo-cluster"
-
-  - name: "gcr.io/cloud-builders/kubectl"
-    id: "update-image"
-    args:
-      - set
-      - image
-      - deployment/demo-app
-      - demo-app=asia-south1-docker.pkg.dev/$PROJECT_ID/gcp-devops-demo/demo-app:$SHORT_SHA
-    env:
-      - "CLOUDSDK_COMPUTE_ZONE=asia-south1-a"
-      - "CLOUDSDK_CONTAINER_CLUSTER=devops-demo-cluster"
-
-  - name: "gcr.io/cloud-builders/kubectl"
-    id: "verify-rollout"
-    args:
-      - rollout
-      - status
-      - deployment/demo-app
-      - --timeout=120s
-    env:
-      - "CLOUDSDK_COMPUTE_ZONE=asia-south1-a"
-      - "CLOUDSDK_CONTAINER_CLUSTER=devops-demo-cluster"
+images:
+  - 'asia-south1-docker.pkg.dev/polygon-infra/devops-demo-repo/color-app:$SHORT_SHA'
 
 options:
   logging: CLOUD_LOGGING_ONLY
